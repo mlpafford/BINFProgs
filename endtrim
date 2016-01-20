@@ -1,0 +1,125 @@
+#!/usr/bin/env python2.7
+
+"""
+    Mary Lenore Pafford, BME205 Assignment #2 10-09-2015
+
+   Input commands are as follows:
+   --min_qual Takes an integer value for a minimum quality score cut off.
+   --in_33     Specifies that the file is a FASTQ 33 phred coded file
+   --in_64     Specifies that the file is a FASTQ 64 phred coded file
+   --in_fasta  Specifies that the file is a FASTA file
+   --in_qual   Gives quality scores for the FASTA input
+   These arguments determine output format
+   --out_33    Specifies that the output should be a FASTQ 33 file
+   --out_64    Specifies that the output should be a FASTQ 64 file
+   --out_fasta Specifies that the output should be a FASTA file
+   --out_qual  Specifies that there should be a quality file for the FASTA output
+
+
+  This goal of this program is to takes in a FASTA or FASTQ formatted file and change formatting to desired FASTA FASTQ output with its sequence trimmed of low scores. If minimum score is not specified, the program defaults to no trimming.
+  If there is a specified minimum quality score, then the function endtrim_seq() will edit the sequence to stop recording bases once that minimum is not met.
+
+"""
+
+from __future__ import print_function
+
+import sys
+import argparse
+import operator
+import collections
+import fileinput
+import re
+import BINFmod
+
+from itertools import izip
+
+
+def parse_args():
+    """This command-line parser stores minimum values, files given, and output options.
+       Both input and output arguments are required. Multiple input options are not accepted.
+       Including the minimum quality score as an argument is optional."""
+    parser = argparse.ArgumentParser(description = __doc__)
+        # after parser is declared, options are added using add_argument
+    in_group = parser.add_mutually_exclusive_group()
+        #keeps user from using two input types at once
+    parser.add_argument("--min_qual", type = int, default = 0, action = 'store', dest = "min_qual", help = "the minimum acceptable quality to include. Defaults to zero, to include all bases in sequence")
+    parser.add_argument("--in_qual", type = argparse.FileType('r'), action='store', dest="qual_in", help = "the quality for the fasta file input.")
+    in_group.add_argument("--in_fasta", type = argparse.FileType('r'), action='store', dest="fasta_in", help = "the input file is fasta.")
+    in_group.add_argument("--in_33", type = argparse.FileType('r'), action='store', dest = "file_in33", help = "the input is fastq33")
+    in_group.add_argument("--in_64", type = argparse.FileType('r'), action ='store', dest = "file_in64", help = "the input is fastq64.")
+    parser.add_argument("--out_33", type = argparse.FileType('w'), action ='store', dest = "file_out33", help = "the output should be fastq33" )
+    parser.add_argument("--out_64", type = argparse.FileType('w'), action ='store', dest = "file_out64", help = "the output should be fastq64" )
+    parser.add_argument("--out_fasta", type = argparse.FileType('w'), action = 'store', dest="fasta_out", help = "the output should be a fasta file")
+    parser.add_argument("--out_qual", type = argparse.FileType('w'), action='store', dest="qual_out", help = "specifies a quality file  output.")
+    parsed_args = parser.parse_args()
+
+    return parsed_args
+
+def print_output(fsta, options):
+    """takes in a fast object, which is a string identified sequence with list of quality scores,
+       and prints to an output file based on the formatting option arguments for FASTA or FASTQ 33 or FASTQ64."""
+    if options.fasta_out:
+        if options.qual_out:
+            print(">" + fsta.iden, file = options.qual_out)
+            print ("  ".join(str(number) for number in fsta.qual), file = options.qual_out)
+        print(">" + fsta.iden + " " + fsta.comment, file = options.fasta_out)
+        print(fsta.seq, file = options.fasta_out)
+    if options.file_out33:
+        print("@" + fsta.iden + fsta.comment, file = options.file_out33)
+        print(fsta.seq, file = options.file_out33)
+        print("+", file = options.file_out33)
+        print("".join(str(chr(int(number) + 33)) for number in fsta.qual), file = options.file_out33)
+    if options.file_out64:
+        print("@" + fsta.iden + fsta.comment, file = options.file_out64)
+        print(fsta.seq, file = options.file_out64)
+        print("+", file = options.file_out64)
+        print("".join(str(chr(int(number) + 64)) for number in fsta.qual), file = options.file_out64)
+
+
+def endtrim_seq(fast, min_qual):
+    """Trims the bases off of a given sequence at the first quality lower than thershold score."""
+    trimmed = 0
+    for score in fast.qual:
+         if score < min_qual: break
+         trimmed = trimmed + 1
+    #leave off and bases beyond the trim point by setting seq equal to segment,
+    #do not include their quality score
+    fast.seq = fast.seq[0:trimmed]
+    fast.qual = fast.qual[0:trimmed]
+
+    return fast
+
+def main(args):
+    """Parses command line input for arguments then
+       reads the id and sequence based on the input file format and
+       sends to print_output function for the desired output format.
+       Can also do the trimming when minimum value specified. """
+    options = parse_args()
+    alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    if options.fasta_in:
+        #see if there is a quality file to parse
+        if options.qual_in:
+            for fsta, quality in izip(BINFmod.read_fasta(options.fasta_in, alphabet),
+                BINFmod.read_fasta_quality(options.qual_in)):
+                fsta.qual = quality
+                if options.min_qual: fsta = endtrim_seq(fsta, options.min_qual)
+                print_output(fsta, options)
+        else:
+            #endtrim can be skipped, since no quality was given
+            for fsta in BINFmod.read_fasta(options.fasta_in, alphabet):
+                print_output(fsta, options)
+
+    if options.file_in33:
+        for fstq in BINFmod.read_fastq(options.file_in33, 33):
+            if options.min_qual: fstq = endtrim_seq(fstq, options.min_qual)
+            print_output(fstq, options)
+
+    if options.file_in64:
+        for fstq in BINFmod.read_fastq(options.file_in64, 64):
+            if options.min_qual: fstq = endtrim_seq(fstq, options.min_qual)
+            print_output(fstq, options)
+
+
+if __name__ == "__main__" :
+    sys.exit(main(sys.argv))
+
