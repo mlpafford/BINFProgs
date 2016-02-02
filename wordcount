@@ -1,0 +1,98 @@
+#!/usr/bin/env python2.7
+from __future__ import print_function, division
+
+
+"""
+   Written by Mary Lenore Pafford for BME 205 Assignment 1, 10/02/2015
+
+   This program takes in document with words in stdin,
+   separates it into unique words and counts each word's frequency.
+   It sorts words based on a beginning command line argument.
+   The sorting options are by ascending or descending wordcount,
+   and by alphabetical order, ascending or descending.
+   Alphabetical order, for this program, will prioritize any capital letters over all lower case.
+
+   This works best for documents that only need alphabetical strings counted.
+   As written, all numbers, words mixed with numbers, and symbols are ignored.
+
+   The output is one line per word; the word is followed by a tab spacing, and the word frequency in the document.
+   The order of those lines depends on the sorting option. Default follows ascending sort rules.  
+
+"""
+
+import sys
+import operator
+import collections
+import argparse
+import fileinput
+import re
+
+
+def read_word(file):
+    """reads in file, and line by line, splits into words
+       based on whitespaces and special characters.
+       Yields words as individual strings.
+    """
+    for line in file:
+        for word in re.findall("(\w[\w']*)", line):
+            # word is any string of letters that is uninterrupted by numbers, spaces or symbols. 
+            if word.isalpha():
+                yield (word)
+
+
+def parse_args(args):
+    """this is the command-line parser.
+       There are three argument options:
+       --ascend puts the words in ascending order of frequency.
+       --descend puts the words in descending order of frequency.
+       --alpha is a simple alphabetical ordering.
+       User may combine --alpha and --descend to reverse the alphabetical order.
+       Otherwise, default for alpha, or alpha and ascending, will print in standard alphabetical order.
+    """
+    parser = argparse.ArgumentParser(description ='Process sort options for wordcount')
+    sort = parser.add_mutually_exclusive_group()
+    sort.add_argument("--ascend", action='store_true', dest="ascend", help = "order in ascending order of word frequency, most frequent is last" )
+    sort.add_argument("--descend", action='store_false', dest="ascend", help = "order in descending order of frequency, most frequent is first.")
+    parser.add_argument("--alpha", action = 'store_true', dest="alpha", help = "order by the alphabetical order of words. Follow with '--descend' argument to reverse order")
+    parsed_args = parser.parse_args()
+    return parsed_args
+
+
+def print_output(file, counts, freq_order, alpha):
+    """sorts and prints words and counts based on the option argument
+    """
+    counts_list = counts.items()
+        # counts_list is storing the tuples created when counting, consists of (word, frequency)
+    if freq_order:
+        if alpha == False:
+            counts_list = sorted(counts_list, key= lambda counts:(counts[1], counts[0]), reverse = False)
+                # sorts based on count number first, then uses the word order as a "tie-breaker"
+    if freq_order == False:
+        if alpha == False:
+            counts_list.sort()
+            counts_list = sorted(counts_list, key = lambda counts:(counts[1], counts[0]), reverse = True)
+                # the reverse of above sort is set to true.
+                # also reverses the tie breaker, so counts_list had to be alphabetically sorted in line above sorted().
+    if alpha:
+        counts_list.sort(reverse = not freq_order)
+
+    for counts in counts_list:
+        print(counts[0], counts[1], sep = '\t')
+
+
+def main(args):
+    """Parses command line input for arguments
+       then uses read_word to split input into words
+       and adds to that word's count.
+       Sends tuple of counts to the print_output function.
+    """
+    options = parse_args(args)
+    counts = collections.defaultdict(int)
+        # defaultdict used to start unseen words with no count (count 0)
+        # counts[word] will hold that word's frequency value
+    for word in read_word(sys.stdin):
+        counts[word] += 1
+    print_output(sys.stdout, counts, options.ascend, options.alpha)
+
+if __name__ == "__main__" :
+    sys.exit(main(sys.argv))
