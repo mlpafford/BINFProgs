@@ -1,0 +1,64 @@
+#!/usr/bin/env python2.7
+
+"""
+   count-kmers written by Mary Lenore Pafford for BME 205, Assignment 4 due 10/23/2015
+
+   This program takes in input of a fasta file, 
+   uses a fasta parser to check that the characters fit in a given alphabet,
+   and orders the input sequences into kmers of given Markov order.
+   
+   Those kmers are then counted over the entire file. These can be used to make probablitiy calculations.     
+
+   The output is a table of tuples. Each line is a kmer and its count, separated by a space.
+
+   This program needs multiple functions from Markov.py, and the fasta_read() function from BINFmod.py 
+
+"""
+
+import sys
+import string
+import operator
+import collections
+import argparse
+import fileinput
+import re
+import BINFmod
+import Markov
+
+def parse_args(args):
+    """this is the command-line parser.
+       There are two argument options:
+       --order to specify order of Markov chain, determines by kmer length. Default is zero.
+       --alphabetical is a check of the file alphabet. Only capital letters needed. Default to all letters.
+    """
+
+    parser = argparse.ArgumentParser(description = __doc__)
+    parser.add_argument("-o", "--order", action='store', type = int, dest = 'order',
+    help = "This order option refers to the number of letters in each kmer. Order defaults to zero order chain, one letter only." )
+    parser.add_argument("-a", "--alphabetical", action = 'store', dest= 'alpha',
+    help = "This alphabetical option sets the letters considered okay input from FASTA file.")
+    parser.set_defaults(order = 0)
+    parser.set_defaults(alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    parsed_args = parser.parse_args()
+    return parsed_args
+
+
+def main(args):
+    """Reads FASTA file, parses command line arguments
+       Print out two tokens per line, letter and count."""
+    kmer = ''
+    counts = collections.Counter()
+    #These default values for alpha and order can be replaced by parsed arguments
+    options = parse_args(args)
+    kmerCounts = Markov.counting(counts, sys.stdin, options.order+1, options.alpha)
+    #read_fasta is called in Markov.counting, and passes sys.stdin
+    #to count into kmers based on option
+    #option sets number to group in k size.
+    #kmer order number needs one added in order to measure one letter for order zero. 
+    sortedCounts = sorted(kmerCounts.items(), key = operator.itemgetter(0))
+    #now counts are sorted based on key value
+    for key, value in sortedCounts:
+        print(key + " " + str(value))
+
+if __name__ == "__main__" :
+    sys.exit(main(sys.argv))
